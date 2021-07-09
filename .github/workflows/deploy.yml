@@ -16,7 +16,7 @@ jobs:
     - name: Compile driver
       run: |
         cd ${{ github.workspace }}
-        cd dgd/src
+        cd src
         make
         make install
 
