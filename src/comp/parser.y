@@ -86,11 +86,11 @@ private:
 
 
 /*
- * Keywords. The order is determined in tokenz() in the lexical scanner.
+ * Keywords. The order is determined in PP::tokenz() in the lexical scanner.
  */
-%token VOID INHERIT MAPPING BREAK ELSE CASE NIL FOR STATIC CONTINUE PRIVATE
-       FUNCTION RLIMITS RETURN OPERATOR FLOAT DO IF OBJECT GOTO STRING WHILE
-       NEW VARARGS CATCH SWITCH NOMASK ATOMIC INT DEFAULT MIXED
+%token NOMASK BREAK DO MAPPING ELSE CASE OBJECT DEFAULT FLOAT CONTINUE STATIC
+       INT FOR IF OPERATOR INHERIT RLIMITS GOTO FUNCTION RETURN MIXED WHILE
+       STRING TRY PRIVATE VOID NEW CATCH ATOMIC NIL SWITCH VARARGS
 
 /*
  * composite tokens
@@ -133,7 +133,7 @@ private:
 	     bitand_oper_exp bitxor_oper_exp bitor_oper_exp and_oper_exp
 	     or_oper_exp cond_exp exp list_exp opt_list_exp f_list_exp
 	     f_opt_list_exp arg_list opt_arg_list opt_arg_list_comma assoc_exp
-	     assoc_arg_list opt_assoc_arg_list_comma ident
+	     assoc_arg_list opt_assoc_arg_list_comma ident exception
 
 %%
 
@@ -190,6 +190,12 @@ opt_inherit_label
 ident
 	: IDENTIFIER
 		{ $$ = Node::createStr(String::create(yytext, yyleng)); }
+	;
+
+exception
+	: ident
+	| ELLIPSIS
+		{ $$ = (Node *) NULL; }
 	;
 
 composite_string
@@ -544,6 +550,36 @@ nocase_stmt
 		}
 	  compound_stmt
 		{ $$ = Compile::endRlimits($3, $5, $8); }
+	| TRY	{
+		  Compile::startCatch();
+		  Compile::startCond();
+		}
+	  compound_stmt
+		{
+		  Compile::endCond();
+		  Compile::endCatch();
+		  Compile::startCond();
+		}
+	  CATCH '(' exception ')' '{'
+		{
+		  nstatements = 0;
+		  Compile::startCompound();
+		  if ($7 != (Node *) NULL) {
+		      $<node>9 = Compile::exprStmt(Compile::exception($7));
+		  }
+		}
+	  dcltr_or_stmt_list '}'
+		{
+		  nstatements++;
+		  $$ = Compile::endCompound($11);
+		  Compile::endCond();
+		  if ($7 != (Node *) NULL && $$ != (Node *) NULL) {
+		      $$ = Compile::doneCatch($3, Compile::concat($<node>9, $$),
+					      FALSE);
+		  } else {
+		      $$ = Compile::doneCatch($3, $$, TRUE);
+		  }
+		}
 	| CATCH	{
 		  Compile::startCatch();
 		  Compile::startCond();
@@ -557,7 +593,7 @@ nocase_stmt
 	  opt_caught_stmt
 		{
 		  Compile::endCond();
-		  $$ = Compile::doneCatch($3, $5);
+		  $$ = Compile::doneCatch($3, $5, TRUE);
 		}
 	| SWITCH '(' f_list_exp ')'
 		{
@@ -622,6 +658,8 @@ case_list
 		      if ($1 != (Node *) NULL) {
 			  $$->l.left = $1;
 			  $$->r.right = $1->r.right;
+		      } else {
+			  $$->r.right = $$;
 		      }
 		  } else {
 		      $$ = $1;
@@ -2032,7 +2070,12 @@ Node *YYParser::assign(Node *n1, Node *n2)
 		}
 	    }
 	}
-	return Node::createBin(N_ASSIGN, T_VOID, n1, n2);
+	n1 = Node::createBin(N_ASSIGN, n2->mod, n1, n2);
+	n1->sclass = n2->sclass;
+	if (n1->sclass != (String *) NULL) {
+	    n1->sclass->ref();
+	}
+	return n1;
     } else {
 	if (typechecking && (!Compile::nil(n2) || !T_POINTER(n1->mod))) {
 	    /*

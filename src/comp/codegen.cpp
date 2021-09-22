@@ -1021,12 +1021,16 @@ void Codegen::expr(Node *n, int pop)
 
     case N_ASSIGN:
 	if (n->l.left->type == N_AGGR) {
+	    char *instr;
+
 	    l = lvalAggr(&n->l.left->l.left);
 	    expr(n->r.right, FALSE);
 	    CodeChunk::instr(I_STORES, n->line);
 	    CodeChunk::word(l);
+	    instr = last_instruction;
 	    storeAggr(n->l.left->l.left);
-	    return;
+	    last_instruction = instr;
+	    break;
 	}
 
 	lvalue(n->l.left, FALSE);
@@ -1043,6 +1047,9 @@ void Codegen::expr(Node *n, int pop)
 	jlist = JmpList::jump((pop) ? I_CATCH | I_POP_BIT : I_CATCH,
 			      (JmpList *) NULL);
 	expr(n->l.left, TRUE);
+	if (!pop) {
+	    CodeChunk::kfun(KF_NIL, 0);
+	}
 	CodeChunk::instr(I_RETURN, 0);
 	JmpList::resolve(jlist, here);
 	return;
@@ -1098,6 +1105,10 @@ void Codegen::expr(Node *n, int pop)
 	expr(n->l.left, FALSE);
 	expr(n->r.right, FALSE);
 	CodeChunk::kfun(KF_EQ_FLT, n->line);
+	break;
+
+    case N_EXCEPTION:
+	store(n->l.left);
 	break;
 
     case N_FLOAT:
@@ -2258,7 +2269,8 @@ void Codegen::stmt(Node *n)
 	    break;
 
 	case N_CATCH:
-	    jlist = JmpList::jump(I_CATCH | I_POP_BIT, (JmpList *) NULL);
+	    jlist = JmpList::jump((m->mod) ? I_CATCH | I_POP_BIT : I_CATCH,
+				  (JmpList *) NULL);
 	    stmt(m->l.left);
 	    if (m->l.left->flags & F_END) {
 		JmpList::resolve(jlist, here);

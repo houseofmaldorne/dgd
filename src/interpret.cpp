@@ -254,24 +254,24 @@ void Frame::aggregate(unsigned int size)
  */
 void Frame::mapAggregate(unsigned int size)
 {
-    Array *a;
+    Mapping *a;
 
     if (size == 0) {
-	a = Array::mapCreate(data, 0);
+	a = Mapping::create(data, 0);
     } else {
 	Value *elts;
 
 	addTicks(size);
-	a = Array::mapCreate(data, size);
+	a = Mapping::create(data, size);
 	elts = a->elts + size;
 	do {
 	    *--elts = *sp++;
 	} while (--size != 0);
 	try {
 	    EC->push();
-	    a->mapSort();
+	    a->sort();
 	    EC->pop();
-	} catch (...) {
+	} catch (const char*) {
 	    /* error in sorting, delete mapping and pass on error */
 	    a->ref();
 	    a->del();
@@ -387,7 +387,8 @@ void Frame::index(Value *aval, Value *ival, Value *val, bool keep)
 	break;
 
     case T_MAPPING:
-	*val = *aval->array->mapIndex(data, ival, NULL, NULL);
+	*val = *dynamic_cast<Mapping *> (aval->array)->index(data, ival, NULL,
+							     NULL);
 	if (!keep) {
 	    ival->del();
 	}
@@ -642,7 +643,7 @@ bool Frame::storeIndex(Value *var, Value *aval, Value *ival, Value *val)
 	if (var->type != T_STRING) {
 	    var = NULL;
 	}
-	arr->mapIndex(data, ival, val, var);
+	dynamic_cast<Mapping *> (arr)->index(data, ival, val, var);
 	ival->del();
 	arr->del();
 	break;
@@ -938,9 +939,6 @@ void Frame::stores(int skip, int assign)
 	}
 	--assign;
     }
-
-    sp->array->del();
-    sp++;
 }
 
 /*
@@ -1800,6 +1798,9 @@ void Frame::interpret(char *pc)
 	    if (kflv) {
 		kflv = FALSE;
 		lvalues(u);
+
+		sp->array->del();
+		sp++;
 	    } else {
 		if (sp->type != T_ARRAY) {
 		    EC->error("Value is not an array");
@@ -1809,6 +1810,11 @@ void Frame::interpret(char *pc)
 		}
 		Dataspace::elts(sp->array);
 		stores(0, u);
+
+		if (p_ctrl->version < 3) {
+		    sp->array->del();
+		    sp++;
+		}
 	    }
 	    pc = this->pc;
 	    break;
@@ -2003,8 +2009,10 @@ void Frame::interpret(char *pc)
 		interpret(pc);
 		EC->pop();
 		pc = this->pc;
-		*--sp = Value::nil;
-	    } catch (...) {
+		if (p_ctrl->version < 3 || (instr & I_POP_BIT)) {
+		    *--sp = Value::nil;
+		}
+	    } catch (const char*) {
 		/* error */
 		this->pc = p;
 		if (p < pc) {
@@ -2734,7 +2742,7 @@ bool Frame::callCritical(const char *func, int narg, int flag)
 	DGD::callDriver(this, func, narg);
 	ok = TRUE;
 	EC->pop();
-    } catch (...) {
+    } catch (const char*) {
 	ok = FALSE;
     }
     setRlimits(rlim->next);
