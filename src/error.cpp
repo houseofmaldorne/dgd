@@ -94,7 +94,7 @@ void ErrorContextImpl::pop()
 /*
  * dummy handler for previously handled error
  */
-static void dummyHandler(Frame *f, Int depth)
+static void dummyHandler(Frame *f, LPCint depth)
 {
     UNREFERENCED_PARAMETER(f);
     UNREFERENCED_PARAMETER(depth);
@@ -137,7 +137,6 @@ void ErrorContextImpl::clearException()
 void ErrorContextImpl::error(String *str)
 {
     ErrorFrame *e;
-    int offset;
     Handler handler;
 
     if (str != (String *) NULL) {
@@ -149,7 +148,6 @@ void ErrorContextImpl::error(String *str)
     }
 
     e = eFrame;
-    offset = e->offset;
 
     if (atomicFrame == (ErrorFrame *) NULL || atomicFrame == e) {
 	do {
