@@ -1,7 +1,7 @@
 #
 # This file is part of DGD, https://github.com/dworkin/dgd
 # Copyright (C) 1993-2010 Dworkin B.V.
-# Copyright (C) 2010-2021 DGD Authors (see the commit log for details)
+# Copyright (C) 2010-2024 DGD Authors (see the commit log for details)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -39,7 +39,7 @@ ifndef HOST
   $(error HOST is undefined)
 endif
 
-DEFINES= -DSLASHSLASH # -DNOFLOAT -DCLOSURES
+DEFINES=		# -DLARGENUM -DSLASHSLASH -DNOFLOAT -DCLOSURES
 DEBUG=	-g -DDEBUG
 CCFLAGS=-D$(HOST) $(DEFINES) $(DEBUG)
 CXXFLAGS=-I. -Icomp -Ilex -Ied -Iparser -Ikfun $(CCFLAGS)
@@ -109,6 +109,10 @@ ed/ed::
 	$(MAKE) -C ed 'CXX=$(CXX)' 'HOST=$(HOST)' 'CCFLAGS=$(CCFLAGS)' \
 		'LD=$(LD)' 'LDFLAGS=$(LDFLAGS)' ed
 
+lex/lex::
+	$(MAKE) -C lex 'CXX=$(CXX)' 'HOST=$(HOST)' 'CCFLAGS=$(CCFLAGS)' \
+		'LD=$(LD)' 'LDFLAGS=$(LDFLAGS)' lex
+
 clean:
 	rm -f a.out $(OBJ)
 	$(MAKE) -C comp clean
@@ -123,7 +127,7 @@ path.o config.o dgd.o: comp/node.h comp/compile.h
 config.o: comp/parser.h
 array.o object.o data.o config.o interpret.o ext.o: comp/control.h
 
-config.o: lex/macro.h lex/token.h lex/ppcontrol.h
+path.o config.o: lex/ppcontrol.h
 
 editor.o: ed/edcmd.h
 
@@ -146,5 +150,5 @@ swap.o: hash.h swap.h
 editor.o config.o dgd.o: editor.h
 data.o call_out.o config.o dgd.o: call_out.h
 error.o comm.o config.o ext.o dgd.o: comm.h
-object.o interpret.o config.o dgd.o: ext.h
+object.o data.o interpret.o config.o dgd.o: ext.h
 comm.o config.o: version.h

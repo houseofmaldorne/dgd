@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -79,6 +79,7 @@ public:
 # define CF_OUTPUT	0x0040	/* pending output */
 # define CF_ODONE	0x0080	/* output done */
 # define CF_OPENDING	0x0100	/* waiting for connect() to complete */
+# define CF_STOPPED	0x0200	/* output stopped */
 
 /* state */
 # define TS_DATA	0
@@ -361,8 +362,8 @@ static char ayt[22];		/* are you there? */
  * initialize communications
  */
 bool Comm::init(int n, int p, char **thosts, char **bhosts, char **dhosts,
-	unsigned short *tports, unsigned short *bports, unsigned short *dports,
-	int ntelnet, int nbinary, int ndatagram)
+		unsigned short *tports, unsigned short *bports,
+		unsigned short *dports, int ntelnet, int nbinary, int ndatagram)
 {
     int i;
     User *usr;
@@ -385,7 +386,7 @@ bool Comm::init(int n, int p, char **thosts, char **bhosts, char **dhosts,
     nusers = odone = newlines = 0;
     this_user = OBJ_NONE;
 
-    sprintf(ayt, "\15\12[%s]\15\12", VERSION);
+    snprintf(ayt, sizeof(ayt), "\15\12[%s]\15\12", VERSION);
 
     nexttport = nextbport = nextdport = 0;
 
@@ -554,8 +555,13 @@ void Comm::challenge(Object *obj, String *str)
  */
 int Comm::send(Object *obj, String *str)
 {
+    Value *v;
     User *usr;
 
+    v = Dataspace::elts(Dataspace::extra(obj->data)->array);
+    if (v->number & CF_STOPPED) {
+	EC->error("Output channel closed");
+    }
     usr = &users[EINDEX(obj->etabi)];
     if (usr->flags & CF_TELNET) {
 	char outbuf[OUTBUF_SIZE];
@@ -715,6 +721,37 @@ void Comm::block(Object *obj, int block)
 }
 
 /*
+ * close output channel
+ */
+void Comm::stop(Object *obj)
+{
+    User *usr;
+    Dataspace *data;
+    Array *arr;
+    Value *v;
+
+    usr = &users[EINDEX(obj->etabi)];
+    if (!(usr->flags & CF_TELNET) &&
+	(usr->flags & (CF_UDP | CF_UDPDATA)) == CF_UDPDATA) {
+	EC->error("Message channel not enabled");
+    }
+    arr = Dataspace::extra(data = obj->data)->array;
+    v = Dataspace::elts(arr);
+    if (v->number & CF_STOPPED) {
+	EC->error("Output channel already closed");
+    } else {
+	Value val;
+
+	if (!(usr->flags & CF_FLUSH)) {
+	    usr->addtoflush(arr);
+	}
+	val = *v;
+	val.number |= CF_STOPPED;
+	data->assignElt(arr, v, &val);
+    }
+}
+
+/*
  * flush state, output and connections
  */
 void Comm::flush()
@@ -748,10 +785,25 @@ void Comm::flush()
 	    obj->data->assignElt(arr, &arr->elts[1], &Value::nil);
 	    arr->del();
 	    usr->flags &= ~CF_FLUSH;
-	} else {
-	    /* discard */
+	} else if (obj->count != 0) {
+	    /* clean up */
 	    usr->flush = ::flush;
 	    ::flush = usr;
+	} else {
+	    /* discard */
+	    usr->oindex = OBJ_NONE;
+	    if (usr->next == usr) {
+		lastuser = (User *) NULL;
+	    } else {
+		usr->next->prev = usr->prev;
+		usr->prev->next = usr->next;
+		if (usr == lastuser) {
+		    lastuser = usr->next;
+		}
+	    }
+	    usr->next = freeuser;
+	    freeuser = usr;
+	    --nusers;
 	}
     }
 
@@ -805,6 +857,11 @@ void Comm::flush()
 	}
 	if (usr->flags & CF_OUTPUT) {
 	    usr->uflush(obj, obj->data, arr);
+	}
+	if ((v->number & CF_STOPPED) && !(usr->flags & CF_STOPPED)) {
+	    obj->data->assignElt(arr, &v[1], &Value::nil);
+	    usr->flags |= CF_STOPPED;
+	    usr->conn->stop();
 	}
 	/*
 	 * disconnect
@@ -1052,7 +1109,6 @@ void Comm::receive(Frame *f, Uint timeout, unsigned int mtime)
 	    lastuser = usr->next;
 
 	    obj = OBJ(usr->oindex);
-
 
 	    /*
 	     * Check if we have an event pending from connect() and if so,

@@ -72,7 +72,7 @@ int kf_add(Frame *f, int n, KFun *kf)
 {
     String *str;
     Array *a;
-    char *num, buffer[18];
+    char *num, buffer[FLOAT_BUFFER];
     Float f1, f2;
     long l;
 
@@ -2006,7 +2006,7 @@ char pt_tostring[] = { C_STATIC, 1, 0, 0, 7, T_STRING, T_MIXED };
  */
 int kf_tostring(Frame *f, int n, KFun *kf)
 {
-    char *num, buffer[18];
+    char *num, buffer[FLOAT_BUFFER];
     Float flt;
 
     UNREFERENCED_PARAMETER(n);
@@ -2430,7 +2430,7 @@ char pt_add_float_string[] = { C_STATIC, 2, 0, 0, 8, T_STRING, T_FLOAT,
  */
 int kf_add_float_string(Frame *f, int n, KFun *kf)
 {
-    char buffer[18];
+    char buffer[FLOAT_BUFFER];
     Float flt;
     String *str;
     long l;
@@ -2520,7 +2520,7 @@ char pt_add_string_float[] = { C_STATIC, 2, 0, 0, 8, T_STRING, T_STRING,
  */
 int kf_add_string_float(Frame *f, int n, KFun *kf)
 {
-    char buffer[18];
+    char buffer[FLOAT_BUFFER];
     Float flt;
     String *str;
 
@@ -3121,7 +3121,7 @@ char pt_sum[] = { C_STATIC | C_ELLIPSIS, 0, 1, 0, 7, T_MIXED, T_MIXED };
  */
 int kf_sum(Frame *f, int nargs, KFun *kf)
 {
-    char buffer[LPCINT_BUFFER], *num;
+    char buffer[FLOAT_BUFFER], *num;
     String *s;
     Array *a;
     Value *v, *e1, *e2;
@@ -3410,6 +3410,107 @@ int kf_calltr_idx_idx(Frame *f, int n, KFun *kf)
 	EC->error("Array index out of range");
     }
     f->sp++;
+    return 0;
+}
+# endif
+
+
+# ifdef FUNCDEF
+FUNCDEF("strlen", kf_strlen, pt_strlen, 0)
+# else
+char pt_strlen[] = { C_TYPECHECKED | C_STATIC, 1, 0, 0, 7, T_INT, T_STRING };
+
+/*
+ * return the length of a string
+ */
+int kf_strlen(Frame *f, int n, KFun *kf)
+{
+    ssizet len;
+
+    UNREFERENCED_PARAMETER(n);
+    UNREFERENCED_PARAMETER(kf);
+
+    len = f->sp->string->len;
+    f->sp->string->del();
+    PUT_INTVAL(f->sp, len);
+    return 0;
+}
+# endif
+
+
+# ifdef FUNCDEF
+FUNCDEF("[..]", kf_rangeft_str, pt_rangeft_str, 0)
+# else
+char pt_rangeft_str[] = { C_STATIC, 3, 0, 0, 9, T_STRING, T_STRING, T_INT,
+			  T_INT };
+/*
+ * value [ int .. int ]
+ */
+int kf_rangeft_str(Frame *f, int n, KFun *kf)
+{
+    String *str;
+
+    UNREFERENCED_PARAMETER(n);
+    UNREFERENCED_PARAMETER(kf);
+
+    f->addTicks(2);
+    str = f->sp[2].string->range(f->sp[1].number, f->sp->number);
+    f->sp += 2;
+    f->sp->string->del();
+    PUT_STR(f->sp, str);
+
+    return 0;
+}
+# endif
+
+
+# ifdef FUNCDEF
+FUNCDEF("[..]", kf_rangef_str, pt_rangef_str, 0)
+# else
+char pt_rangef_str[] = { C_STATIC, 2, 0, 0, 8, T_STRING, T_STRING, T_INT };
+
+/*
+ * value [ int .. ]
+ */
+int kf_rangef_str(Frame *f, int n, KFun *kf)
+{
+    String *str;
+
+    UNREFERENCED_PARAMETER(n);
+    UNREFERENCED_PARAMETER(kf);
+
+    f->addTicks(2);
+    str = f->sp[1].string->range(f->sp->number, f->sp[1].string->len - 1L);
+    f->sp++;
+    f->sp->string->del();
+    PUT_STR(f->sp, str);
+
+    return 0;
+}
+# endif
+
+
+# ifdef FUNCDEF
+FUNCDEF("[..]", kf_ranget_str, pt_ranget_str, 0)
+# else
+char pt_ranget_str[] = { C_STATIC, 2, 0, 0, 8, T_STRING, T_STRING, T_INT };
+
+/*
+ * value [ .. int ]
+ */
+int kf_ranget_str(Frame *f, int n, KFun *kf)
+{
+    String *str;
+
+    UNREFERENCED_PARAMETER(n);
+    UNREFERENCED_PARAMETER(kf);
+
+    f->addTicks(2);
+    str = f->sp[1].string->range(0, f->sp->number);
+    f->sp++;
+    f->sp->string->del();
+    PUT_STR(f->sp, str);
+
     return 0;
 }
 # endif

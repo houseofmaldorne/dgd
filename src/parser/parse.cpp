@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -75,11 +75,16 @@ PNode *PNode::create(PnChunk **c, short symb, unsigned short state, char *text,
     return pn;
 }
 
+struct PState {
+    SNode *first;		/* first in list */
+    SNode *last;		/* last in list */
+};
+
 class SNode : public ChunkAllocated {
 public:
-    SNode *add(SnList *list, PNode *pn, SNode *slist);
+    void add(SnList *list, PNode *pn, PState *state);
 
-    static SNode *create(SnList *list, PNode *pn, SNode *slist);
+    static void create(SnList *list, PNode *pn, PState *state);
     static void clear(SnList *list);
 
     PNode *pn;			/* pnode */
@@ -95,7 +100,7 @@ class SnChunk : public Chunk<SNode, SNCHUNKSZ> {
 /*
  * create a new snode
  */
-SNode *SNode::create(SnList *list, PNode *pn, SNode *slist)
+void SNode::create(SnList *list, PNode *pn, PState *state)
 {
     SNode *sn;
 
@@ -112,15 +117,19 @@ SNode *SNode::create(SnList *list, PNode *pn, SNode *slist)
 
     sn->pn = pn;
     sn->next = (SNode *) NULL;
-    sn->slist = slist;
-
-    return sn;
+    if (state->first == (SNode *) NULL) {
+	state->first = state->last = sn;
+    } else {
+	state->last->slist = sn;
+	state->last = sn;
+    }
+    sn->slist = (SNode *) NULL;
 }
 
 /*
  * add an existing snode to a list
  */
-SNode *SNode::add(SnList *list, PNode *pn, SNode *slist)
+void SNode::add(SnList *list, PNode *pn, PState *state)
 {
     if (list->first == (SNode *) NULL) {
 	list->first = list->last = this;
@@ -131,9 +140,13 @@ SNode *SNode::add(SnList *list, PNode *pn, SNode *slist)
 
     this->pn = pn;
     next = (SNode *) NULL;
-    this->slist = slist;
-
-    return this;
+    if (state->first == (SNode *) NULL) {
+	state->first = state->last = this;
+    } else {
+	state->last->slist = this;
+	state->last = this;
+    }
+    slist = (SNode *) NULL;
 }
 
 /*
@@ -280,6 +293,25 @@ Parser::~Parser()
 }
 
 /*
+ * reset a parser that has grown too large
+ */
+void Parser::reset()
+{
+    if (fastr != (char *) NULL) {
+	FREE(fastr);
+	fastr = (char *) NULL;
+    }
+    if (lrstr != (char *) NULL) {
+	FREE(lrstr);
+	lrstr = (char *) NULL;
+    }
+    delete fa;
+    delete lr;
+    fa = Dfa::create(source->text, grammar->text);
+    lr = Srp::create(grammar->text);
+}
+
+/*
  * perform a reduction
  */
 void Parser::reduce(PNode *pn, char *p)
@@ -318,13 +350,12 @@ void Parser::reduce(PNode *pn, char *p)
      * see if this reduction can be merged with another
      */
     frame->addTicks(2);
-    for (sn = states[n]; sn != (SNode *) NULL; sn = sn->slist) {
+    for (sn = states[n].first; sn != (SNode *) NULL; sn = sn->slist) {
 	if (sn->pn->symbol == symb && sn->pn->next == next) {
-	    PNode **ppn;
-
 	    if (sn->pn->text != (char *) NULL) {
 		/* first alternative */
-		sn->pn->list = PNode::create(&pnc, symb, n, sn->pn->text,
+		sn->pn->list = sn->pn->trav =
+			       PNode::create(&pnc, symb, n, sn->pn->text,
 					     sn->pn->len, (PNode *) NULL,
 					     sn->pn->list);
 		sn->pn->text = (char *) NULL;
@@ -332,13 +363,11 @@ void Parser::reduce(PNode *pn, char *p)
 	    }
 
 	    /* add alternative */
-	    for (ppn = &sn->pn->list;
-		 *ppn != (PNode *) NULL && (*ppn)->text < red;
-		 ppn = &(*ppn)->next) ;
+	    sn->pn->trav->next = pn;
+	    sn->pn->trav = pn;
 	    sn->pn->len++;
 
-	    pn->next = *ppn;
-	    *ppn = pn;
+	    pn->next = (PNode *) NULL;
 	    return;
 	}
 	frame->addTicks(1);
@@ -347,7 +376,7 @@ void Parser::reduce(PNode *pn, char *p)
     /*
      * new reduction
      */
-    states[n] = SNode::create(&list, pn, states[n]);
+    SNode::create(&list, pn, &states[n]);
 }
 
 /*
@@ -360,9 +389,9 @@ void Parser::shift(SNode *sn, short token, char *text, ssizet len)
     n = lr->shift(sn->pn->state, token);
     if (n >= 0) {
 	/* shift works: add new snode */
-	states[n] = sn->add(&list, PNode::create(&pnc, token, n, text, len,
-						 sn->pn, (PNode *) NULL),
-			    states[n]);
+	sn->add(&list, PNode::create(&pnc, token, n, text, len, sn->pn,
+				     (PNode *) NULL),
+		&states[n]);
 	return;
     }
 
@@ -389,15 +418,14 @@ PNode *Parser::parse(String *str, bool *toobig)
     if (nstates < nprod) {
 	nstates = nprod;
     }
-    states = ALLOC(SNode*, nstates);
-    memset(states, '\0', nstates * sizeof(SNode*));
+    states = ALLOC(PState, nstates);
+    memset(states, '\0', nstates * sizeof(PState));
     list.first = (SNode *) NULL;
 
     /* state 0 */
-    states[0] = SNode::create(&list, PNode::create(&pnc, 0, 0, (char *) NULL,
-						   (ssizet) 0, (PNode *) NULL,
-						   (PNode *) NULL),
-			      (SNode *) NULL);
+    SNode::create(&list, PNode::create(&pnc, 0, 0, (char *) NULL, (ssizet) 0,
+				       (PNode *) NULL, (PNode *) NULL),
+		  &states[0]);
 
     do {
 	/*
@@ -417,9 +445,9 @@ PNode *Parser::parse(String *str, bool *toobig)
 		/* grow tables */
 		stsize = n;
 		stsize <<= 1;
-		states = REALLOC(states, SNode*, nstates, stsize);
+		states = REALLOC(states, PState, nstates, stsize);
 		memset(states + nstates, '\0',
-		       (stsize - nstates) * sizeof(SNode*));
+		       (stsize - nstates) * sizeof(PState));
 		nstates = stsize;
 	    }
 	    for (n = 0; n < nred; n++) {
@@ -440,7 +468,7 @@ PNode *Parser::parse(String *str, bool *toobig)
 	switch (n = fa->scan(str, &size, &ttext, &tlen)) {
 	case DFA_EOS:
 	    /* if end of string, return node from state 1 */
-	    sn = states[1];
+	    sn = states[1].first;
 	    FREE(states);
 	    return (sn != (SNode *) NULL) ? sn->pn : (PNode *) NULL;
 
@@ -457,7 +485,7 @@ PNode *Parser::parse(String *str, bool *toobig)
 
 	default:
 	    /* shift */
-	    memset(states, '\0', nstates * sizeof(SNode*));
+	    memset(states, '\0', nstates * sizeof(PState));
 	    sn = list.first;
 	    list.first = (SNode *) NULL;
 	    do {
@@ -824,7 +852,8 @@ void Parser::save()
 /*
  * parse a string
  */
-Array *Parser::parse_string(Frame *f, String *source, String *str, LPCint maxalt)
+Array *Parser::parse_string(Frame *f, String *source, String *str,
+			    LPCint maxalt)
 {
     Dataspace *data;
     Parser *ps;
@@ -901,6 +930,7 @@ Array *Parser::parse_string(Frame *f, String *source, String *str, LPCint maxalt
 	    /*
 	     * lexer or parser has become too big
 	     */
+	    ps->reset();
 	    EC->error("Grammar too large");
 	}
 	delete ps->pnc;

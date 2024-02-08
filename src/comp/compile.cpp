@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2024 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -26,8 +26,6 @@
 # include "data.h"
 # include "interpret.h"
 # include "path.h"
-# include "macro.h"
-# include "token.h"
 # include "ppcontrol.h"
 # include "node.h"
 # include "optimize.h"
@@ -544,7 +542,7 @@ bool Compile::inherit(char *file, Node *label, int priv)
 	}
 	obj = Object::find(file, OACC_READ);
 	if (obj == (Object *) NULL) {
-	    compile(f, file, (Object *) NULL, (String **) NULL, 0, TRUE);
+	    compile(f, file, (Object *) NULL, 0, TRUE);
 	    return FALSE;
 	}
     } else {
@@ -577,7 +575,7 @@ bool Compile::inherit(char *file, Node *label, int priv)
 	    file = PM->from(buf, current->file, file);
 	    obj = Object::find(file, OACC_READ);
 	    if (obj == (Object *) NULL) {
-		compile(f, file, (Object *) NULL, (String **) NULL, 0, TRUE);
+		compile(f, file, (Object *) NULL, 0, TRUE);
 		return FALSE;
 	    }
 	}
@@ -600,8 +598,7 @@ extern int yyparse ();
 /*
  * compile an LPC file
  */
-Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
-			 int nstr, int iflag)
+Object *Compile::compile(Frame *f, char *file, Object *obj, int nstr, int iflag)
 {
     Context c;
     char file_c[STRINGSZ + 2];
@@ -620,7 +617,7 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 	    EC->error("Compilation nesting too deep");
 	}
 
-	PP::clear();
+	PP->clear();
 	Control::clear();
 	clear();
     } else if (current != (Context *) NULL) {
@@ -633,7 +630,7 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 	EC->error("Illegal object name \"/%s\"", file);
     }
     strcpy(file_c, file);
-    if (strs == (String **) NULL) {
+    if (nstr == 0) {
 	strcat(file_c, ".c");
     }
     c.frame = f;
@@ -654,8 +651,7 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 		     * compile the driver object to do pathname translation
 		     */
 		    current = (Context *) NULL;
-		    compile(f, driver_object, (Object *) NULL, (String **) NULL,
-			    0, FALSE);
+		    compile(f, driver_object, (Object *) NULL, 0, FALSE);
 		    current = &c;
 		}
 
@@ -664,8 +660,7 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 		    /*
 		     * compile auto object
 		     */
-		    aobj = compile(f, auto_object, (Object *) NULL,
-				   (String **) NULL, 0, TRUE);
+		    aobj = compile(f, auto_object, (Object *) NULL, 0, TRUE);
 		}
 		/* inherit auto object */
 		if (O_UPGRADING(aobj)) {
@@ -676,12 +671,20 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 		Control::inherit(c.frame, file, aobj, (String *) NULL, FALSE);
 	    }
 
-	    if (strs != (String **) NULL) {
-		PP::init(file_c, paths, strs, nstr, 1);
-	    } else if (!PP::init(file_c, paths, (String **) NULL, 0, 1)) {
+	    if (nstr != 0) {
+		int i;
+		Value *v;
+
+		v = f->sp;
+		PP->init(file_c, paths, v->string->text, v->string->len, 1);
+		for (i = 1; i < nstr; i++) {
+		    v++;
+		    PP->push(v->string->text, v->string->len);
+		}
+	    } else if (!PP->init(file_c, paths, (char *) NULL, 0, 1)) {
 		EC->error("Could not compile \"/%s\"", file_c);
 	    }
-	    if (!TokenBuf::include(include, (String **) NULL, 0)) {
+	    if (!PP->include(include, (char *) NULL, 0)) {
 		EC->error("Could not include \"/%s\"", include);
 	    }
 
@@ -710,7 +713,7 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 
 	    } else if (nerrors == 0) {
 		/* another try */
-		PP::clear();
+		PP->clear();
 		Control::clear();
 		clear();
 	    } else {
@@ -720,14 +723,14 @@ Object *Compile::compile(Frame *f, char *file, Object *obj, String **strs,
 	}
 	EC->pop();
     } catch (const char*) {
-	PP::clear();
+	PP->clear();
 	Control::clear();
 	clear();
 	current = c.prev;
 	EC->error((char *) NULL);
     }
 
-    PP::clear();
+    PP->clear();
     if (!seen_decls) {
 	/*
 	 * object with inherit statements only (or nothing at all)
@@ -787,7 +790,7 @@ String *Compile::objecttype(Node *n)
 	Frame *f;
 
 	f = current->frame;
-	p = TokenBuf::filename();
+	p = PP->filename();
 	PUSH_STRVAL(f, String::create(p, strlen(p)));
 	PUSH_STRVAL(f, n->l.string);
 	DGD::callDriver(f, "object_type", 2);
@@ -1539,8 +1542,18 @@ Node *Compile::endSwitch(Node *expr, Node *stmt)
 		    sz = 2;
 		} else if (l <= 8388607L) {
 		    sz = 3;
-		} else {
+# ifdef LARGENUM
+		} else if (l <= 2147483647LL) {
 		    sz = 4;
+		} else if (l <= 549755813887LL) {
+		    sz = 5;
+		} else if (l <= 140737488355327LL) {
+		    sz = 6;
+		} else if (l <= 36028797018963967LL) {
+		    sz = 7;
+# endif
+		} else {
+		    sz = sizeof(LPCint);
 		}
 
 		if (i == 0 && cnt >= size) {
@@ -1555,7 +1568,7 @@ Node *Compile::endSwitch(Node *expr, Node *stmt)
 			 * convert range label switch to int label switch
 			 * by adding new labels
 			 */
-			w = ALLOCA(Node*, cnt);
+			w = ALLOCA(Node*, ++cnt);
 			for (i = size; i > 0; --i) {
 			    *w++ = *v;
 			    for (l = v[0]->l.left->l.number;
@@ -1856,7 +1869,7 @@ Node *Compile::returnStmt(Node *n, int typechecked)
 void Compile::startCompound()
 {
     if (thisblock == (CodeBlock *) NULL) {
-	fline = TokenBuf::line();
+	fline = PP->line();
     }
     CodeBlock::create();
 }
@@ -1969,7 +1982,8 @@ Node *Compile::flookup(Node *n, int typechecked)
     long call;
 
     proto = Control::funCall(n->l.string, &sclass, &call, typechecked);
-    n->r.right = (proto == (char *) NULL) ? (Node *) NULL :
+    n->r.right = (proto == (char *) NULL) ?
+		  (Node *) NULL :
 		  Node::createFcall(PROTO_FTYPE(proto), sclass, proto, call);
     return n;
 }
@@ -2622,36 +2636,54 @@ unsigned short Compile::matchType(unsigned int type1, unsigned int type2)
 }
 
 /*
- * Call the driver object with the supplied error message.
+ * Forward the error to the preprocessor error handler.
  */
 void Compile::error(const char *format, ...)
 {
     va_list args;
-    char *fname, buf[4 * STRINGSZ];	/* file name + 2 * string + overhead */
+    char buf[3 * STRINGSZ];	/* 2 * string + overhead */
 
-    if (driver_object != (char *) NULL &&
-	Object::find(driver_object, OACC_READ) != (Object *) NULL) {
-	Frame *f;
-
-	f = current->frame;
-	fname = TokenBuf::filename();
-	PUSH_STRVAL(f, String::create(fname, strlen(fname)));
-	PUSH_INTVAL(f, TokenBuf::line());
-	va_start(args, format);
-	vsprintf(buf, format, args);
-	va_end(args);
-	PUSH_STRVAL(f, String::create(buf, strlen(buf)));
-
-	DGD::callDriver(f, "compile_error", 3);
-	(f->sp++)->del();
-    } else {
-	/* there is no driver object to call; show the error on stderr */
-	sprintf(buf, "%s, %u: ", TokenBuf::filename(), TokenBuf::line());
-	va_start(args, format);
-	vsprintf(buf + strlen(buf), format, args);
-	va_end(args);
-	EC->message("%s\012", buf);     /* LF */
-    }
-
-    nerrors++;
+    va_start(args, format);
+    vsnprintf(buf, sizeof(buf), format, args);
+    va_end(args);
+    PP->error("%s", buf);
 }
+
+
+class PreprocImpl : public Preproc {
+public:
+    /*
+     * Call the driver object with the supplied error message.
+     */
+    virtual void error(const char *format, ...) {
+	va_list args;
+	char buf[3 * STRINGSZ];		/* 2 * string + overhead */
+
+	va_start(args, format);
+	vsnprintf(buf, sizeof(buf), format, args);
+	va_end(args);
+
+	if (driver_object != (char *) NULL &&
+	    Object::find(driver_object, OACC_READ) != (Object *) NULL) {
+	    Frame *f;
+	    char *fname;
+
+	    f = current->frame;
+	    fname = PP->filename();
+	    PUSH_STRVAL(f, String::create(fname, strlen(fname)));
+	    PUSH_INTVAL(f, PP->line());
+	    PUSH_STRVAL(f, String::create(buf, strlen(buf)));
+
+	    DGD::callDriver(f, "compile_error", 3);
+	    (f->sp++)->del();
+	} else {
+	    /* there is no driver object to call; fall back to the default */
+	    Preproc::error("%s", buf);
+	}
+
+	nerrors++;
+    }
+};
+
+static PreprocImpl PPI;
+Preproc *PP = &PPI;

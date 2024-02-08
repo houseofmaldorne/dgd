@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,6 +20,10 @@
 # define INCLUDE_CTYPE
 # include "dgd.h"
 # include "xfloat.h"
+
+# ifdef LARGENUM
+# error LARGENUM not supported with simulated floats
+# endif
 
 class Flt {
 public:
@@ -58,7 +62,6 @@ public:
 
 Float max_int =		{ 0x41df, 0xffffffc0L };	/* 0x7fffffff */
 Float thousand =	{ 0x408f, 0x40000000L };	/* 1e3 */
-Float thousandth =	{ 0x3f50, 0x624dd2f2L };	/* 1e-3 */
 
 # define FLT_CONST(s, e, h, l)	{ (unsigned short) (s) << 15,		\
 				  (e) + BIAS,				\

@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2024 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -43,8 +43,6 @@ int kf_compile_object(Frame *f, int nargs, KFun *kf)
     char file[STRINGSZ];
     Value *v;
     Object *obj;
-    String **strs;
-    int i;
     bool iflag;
 
     UNREFERENCED_PARAMETER(kf);
@@ -65,14 +63,6 @@ int kf_compile_object(Frame *f, int nargs, KFun *kf)
 	    EC->error("Cannot recompile inherited object");
 	}
     }
-    if (--nargs != 0) {
-	strs = ALLOCA(String*, nargs);
-	for (i = nargs, v = f->sp; i > 0; --i) {
-	    *strs++ = (v++)->string;
-	}
-    } else {
-	strs = (String **) NULL;
-    }
     try {
 	EC->push();
 	if (OBJR(f->oindex)->flags & O_DRIVER) {
@@ -85,18 +75,12 @@ int kf_compile_object(Frame *f, int nargs, KFun *kf)
 	} else {
 	    iflag = FALSE;
 	}
-	obj = Compile::compile(f, file, obj, strs, nargs, iflag);
+	obj = Compile::compile(f, file, obj, --nargs, iflag);
 	EC->pop();
     } catch (const char*) {
-	if (nargs != 0) {
-	    AFREE(strs - nargs);
-	}
 	EC->error((char *) NULL);
     }
-    if (nargs != 0) {
-	AFREE(strs - nargs);
-	f->pop(nargs);
-    }
+    f->pop(nargs);
     f->sp->string->del();
     PUT_OBJVAL(f->sp, obj);
 
@@ -673,29 +657,6 @@ int kf_users(Frame *f, int n, KFun *kf)
 
 
 # ifdef FUNCDEF
-FUNCDEF("strlen", kf_strlen, pt_strlen, 0)
-# else
-char pt_strlen[] = { C_TYPECHECKED | C_STATIC, 1, 0, 0, 7, T_INT, T_STRING };
-
-/*
- * return the length of a string
- */
-int kf_strlen(Frame *f, int n, KFun *kf)
-{
-    ssizet len;
-
-    UNREFERENCED_PARAMETER(n);
-    UNREFERENCED_PARAMETER(kf);
-
-    len = f->sp->string->len;
-    f->sp->string->del();
-    PUT_INTVAL(f->sp, len);
-    return 0;
-}
-# endif
-
-
-# ifdef FUNCDEF
 FUNCDEF("allocate", kf_allocate, pt_allocate, 0)
 # else
 char pt_allocate[] = { C_TYPECHECKED | C_STATIC, 1, 0, 0, 7,
@@ -967,6 +928,7 @@ int kf_send_message(Frame *f, int n, KFun *kf)
 }
 # endif
 
+
 # ifdef FUNCDEF
 FUNCDEF("send_datagram", kf_send_datagram, pt_send_datagram, 0)
 # else
@@ -993,6 +955,33 @@ int kf_send_datagram(Frame *f, int n, KFun *kf)
     }
     f->sp->string->del();
     PUT_INTVAL(f->sp, num);
+    return 0;
+}
+# endif
+
+
+# ifdef FUNCDEF
+FUNCDEF("send_close", kf_send_close, pt_send_close, 0)
+# else
+char pt_send_close[] = { C_STATIC, 0, 0, 0, 6, T_VOID };
+
+/*
+ * close output stream
+ */
+int kf_send_close(Frame *f, int n, KFun *kf)
+{
+    Object *obj;
+
+    UNREFERENCED_PARAMETER(n);
+    UNREFERENCED_PARAMETER(kf);
+
+    if (f->lwobj == (LWO *) NULL) {
+	obj = OBJW(f->oindex);
+	if ((obj->flags & O_SPECIAL) == O_USER && obj->count != 0) {
+	    Comm::stop(obj);
+	}
+    }
+    *--f->sp = Value::nil;
     return 0;
 }
 # endif
@@ -1094,7 +1083,7 @@ int kf_millitime(Frame *f, int n, KFun *kf)
     a = Array::create(f->data, 2);
     PUT_INTVAL(&a->elts[0], P_mtime(&milli));
     Float::itof(milli, &flt);
-    flt.mult(thousandth);
+    flt.div(thousand);
     PUT_FLTVAL(&a->elts[1], flt);
     PUSH_ARRVAL(f, a);
     return 0;
@@ -1189,7 +1178,7 @@ int kf_remove_call_out(Frame *f, int n, KFun *kf)
     if (mdelay != TIME_INT) {
 	Float::itof(delay, &flt1);
 	Float::itof(mdelay, &flt2);
-	flt2.mult(thousandth);
+	flt2.div(thousand);
 	flt1.add(flt2);
 	PUT_FLTVAL(f->sp, flt1);
     } else {
@@ -1582,4 +1571,5 @@ int kf_call_function(Frame *f, int nargs, KFun *kf)
 FUNCDEF("0.call_other", kf_call_other, pt_call_other, 0)
 FUNCDEF("0.call_trace", kf_call_trace, pt_call_trace, 0)
 FUNCDEF("0.status", kf_status, pt_status, 0)
+FUNCDEF("0.strlen", kf_strlen, pt_strlen, 0)
 # endif

@@ -51,6 +51,23 @@ typedef EINDEX_TYPE eindex;
 # define EINDEX(e)	((eindex) e)
 typedef SSIZET_TYPE ssizet;
 
+# ifdef LARGENUM
+
+# if UINDEX_MAX == USHRT_MAX
+# error LARGENUM requires uindex of 4 bytes or more
+# endif
+
+typedef int64_t LPCint;
+typedef uint64_t LPCuint;
+
+# define LPCINT_MIN	0x8000000000000000LL
+# define LPCINT_MAX	0x7fffffffffffffffLL
+# define LPCINT_BITS	64
+# define LPCINT_BUFFER	22
+# define LPCUINT_MAX	0xffffffffffffffffLL
+
+# else
+
 typedef Int LPCint;
 typedef Uint LPCuint;
 
@@ -59,6 +76,8 @@ typedef Uint LPCuint;
 # define LPCINT_BITS	32
 # define LPCINT_BUFFER	12
 # define LPCUINT_MAX	0xffffffffL
+
+# endif
 
 typedef unsigned short kfindex;
 # define KFTAB_SIZE	1024
@@ -135,13 +154,13 @@ public:
     char secsize[2];
     char s[2];			/* short */
     char i[4];			/* Int */
-    char l[8];			/* Uuint */
+    char l[8];			/* int64_t */
     char utsize;		/* sizeof(uindex) + sizeof(ssizet) */
     char desize;		/* sizeof(sector) + sizeof(eindex) */
     char psize;			/* sizeof(char*), upper nibble reserved */
-    char calign;		/* align(char) */
-    char salign;		/* align(short) */
-    char ilalign;		/* align(Int) + align(Uuint) */
+    char calign;		/* align(char), upper nibble reserved */
+    char snalsz;		/* align(short) + sizeof(LPCint)  */
+    char ilalign;		/* align(Int) + align(int64_t) */
     char palign;		/* align(char*) */
     char zalign;		/* align(struct) */
     char start[4];
@@ -204,4 +223,4 @@ private:
 };
 
 /* utility functions */
-extern LPCint strtoint		(char**);
+extern LPCint strtoint(char**);

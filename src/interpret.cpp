@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2022 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -523,7 +523,7 @@ int Frame::instanceOf(Uint sclass)
  */
 int Frame::instanceOf(unsigned int oindex, char *prog)
 {
-    return instanceOf(oindex, prog, Hashtab::hashstr(prog, OBJHASHSZ));
+    return instanceOf(oindex, prog, HM->hashstr(prog, OBJHASHSZ));
 }
 
 /*
@@ -536,14 +536,14 @@ void Frame::cast(Value *val, unsigned int type, Uint sclass)
 
     if (type == T_CLASS) {
 	if (val->type == T_OBJECT) {
-	    if (!instanceOf(val->oindex, sclass)) {
+	    if (instanceOf(val->oindex, sclass) <= 0) {
 		EC->error("Value is not of object type /%s", className(sclass));
 	    }
 	    return;
 	} else if (val->type == T_LWOBJECT) {
 	    elts = Dataspace::elts(val->array);
 	    if (elts->type == T_OBJECT) {
-		if (!instanceOf(elts->oindex, sclass)) {
+		if (instanceOf(elts->oindex, sclass) <= 0) {
 		    EC->error("Value is not of object type /%s",
 			      className(sclass));
 		}
@@ -1387,14 +1387,14 @@ void Frame::typecheck(Frame *f, const char *name, const char *ftype,
 	    if ((ptype & T_TYPE) == T_CLASS && ptype == T_CLASS &&
 		atype == T_OBJECT) {
 		if (sp[i].type == T_OBJECT) {
-		    if (!f->instanceOf(sp[i].oindex, sclass)) {
+		    if (f->instanceOf(sp[i].oindex, sclass) <= 0) {
 			EC->error("Bad object argument %d for function %s",
 				  nargs - i, name);
 		    }
 		} else {
 		    elts = Dataspace::elts(sp[i].array);
 		    if (elts->type == T_OBJECT) {
-			if (!f->instanceOf(elts->oindex, sclass)) {
+			if (f->instanceOf(elts->oindex, sclass) <= 0) {
 			    EC->error("Bad object argument %d for function %s",
 				      nargs - i, name);
 			}
@@ -1499,6 +1499,68 @@ unsigned short Frame::switchInt(char *pc)
 	    }
 	}
 	break;
+
+# ifdef LARGENUM
+    case 5:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 7 * m;
+	    FETCH5S(p, num);
+	    if (sp->number == num) {
+		return FETCH2U(p, l);
+	    } else if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 6:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 8 * m;
+	    FETCH6S(p, num);
+	    if (sp->number == num) {
+		return FETCH2U(p, l);
+	    } else if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 7:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 9 * m;
+	    FETCH7S(p, num);
+	    if (sp->number == num) {
+		return FETCH2U(p, l);
+	    } else if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 8:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 10 * m;
+	    FETCH8S(p, num);
+	    if (sp->number == num) {
+		return FETCH2U(p, l);
+	    } else if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+# endif
     }
 
     return dflt;
@@ -1590,6 +1652,76 @@ unsigned short Frame::switchRange(char *pc)
 	    }
 	}
 	break;
+
+# ifdef LARGENUM
+    case 5:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 12 * m;
+	    FETCH5S(p, num);
+	    if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		FETCH5S(p, num);
+		if (sp->number <= num) {
+		    return FETCH2U(p, l);
+		}
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 6:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 14 * m;
+	    FETCH6S(p, num);
+	    if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		FETCH6S(p, num);
+		if (sp->number <= num) {
+		    return FETCH2U(p, l);
+		}
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 7:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 16 * m;
+	    FETCH7S(p, num);
+	    if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		FETCH7S(p, num);
+		if (sp->number <= num) {
+		    return FETCH2U(p, l);
+		}
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+
+    case 8:
+	while (l < h) {
+	    m = (l + h) >> 1;
+	    p = pc + 18 * m;
+	    FETCH8S(p, num);
+	    if (sp->number < num) {
+		h = m;	/* search in lower half */
+	    } else {
+		FETCH8S(p, num);
+		if (sp->number <= num) {
+		    return FETCH2U(p, l);
+		}
+		l = m + 1;	/* search in upper half */
+	    }
+	}
+	break;
+# endif
     }
     return dflt;
 }
@@ -1686,6 +1818,9 @@ void Frame::interpret(char *pc)
     int size, instance;
     bool atomic;
     Value val;
+# ifdef LARGENUM
+    Float flt;
+# endif
 
     size = 0;
     l = 0;
@@ -1712,10 +1847,30 @@ void Frame::interpret(char *pc)
 	    PUSH_INTVAL(this, FETCH4S(pc, l));
 	    continue;
 
+# ifdef LARGENUM
+	case I_PUSH_INT8:
+	    PUSH_INTVAL(this, FETCH8S(pc, l));
+	    continue;
+
+	case I_PUSH_FLOAT6:
+	    FETCH2U(pc, u);
+	    Ext::largeFloat(&flt, u, FETCH4U(pc, l));
+	    PUSH_FLTVAL(this, flt);
+	    continue;
+
+	case I_PUSH_FLOAT12:
+	    FETCH4U(pc, l);
+	    flt.high = l;
+	    FETCH8U(pc, l);
+	    flt.low = l;
+	    PUSH_FLTVAL(this, flt);
+	    continue;
+# else
 	case I_PUSH_FLOAT6:
 	    FETCH2U(pc, u);
 	    PUSH_FLTCONST(this, u, FETCH4U(pc, l));
 	    continue;
+# endif
 
 	case I_PUSH_STRING:
 	    PUSH_STRVAL(this, p_ctrl->strconst(p_ctrl->ninherits - 1,
@@ -2240,6 +2395,10 @@ void Frame::funcall(Object *obj, LWO *lwobj, int p_ctrli, int funci, int nargs)
     f.fp = f.sp = f.stack + n + MIN_STACK + EXTRA_STACK;
     f.sos = TRUE;
 
+    if (f.p_ctrl->version >= 4) {
+	pc += 2;
+    }
+
     /* initialize local variables */
     n = FETCH1U(pc);
 # ifdef DEBUG
@@ -2406,6 +2565,9 @@ unsigned short Frame::line()
     line = 0;
     pc = p_ctrl->prog + func->offset;
     pc += PROTO_SIZE(pc) + 3;
+    if (p_ctrl->version >= 4) {
+	pc += 2;
+    }
     FETCH2U(pc, u);
     numbers = pc + u;
 
@@ -2526,6 +2688,16 @@ unsigned short Frame::line()
 	case I_PUSH_FLOAT6:
 	    pc += 6;
 	    break;
+
+# ifdef LARGENUM
+	case I_PUSH_INT8:
+	    pc += 8;
+	    break;
+
+	case I_PUSH_FLOAT12:
+	    pc += 12;
+	    break;
+# endif
 
 	case I_SWITCH:
 	    switch (FETCH1U(pc)) {
