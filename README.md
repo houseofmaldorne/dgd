@@ -40,3 +40,21 @@ This distribution is organized as follows:
     command on Unix.
 -   src/host  
     Subdirectories for various platform-dependent files.
+
+### Added for the Maldorne fork
+
+- Build the container image (from project base directory)
+
+  `docker build --no-cache . -t ghcr.io/maldorne/dgd:latest`
+
+- Run the container and take a look inside using a terminal
+
+  `docker run --rm -ti ghcr.io/maldorne/dgd:latest /bin/bash`
+
+  Inside the container, in `/opt/mud`, you can find the directories `driver` 
+  (with the source code of DGD) and `bin`, with the binaries needed
+  to use DGD.
+
+- Publish the container in Docker Hub
+
+  `docker push ghcr.io/maldorne/dgd:latest`
