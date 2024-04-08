@@ -3,5 +3,5 @@
 	url = https://github.com/dworkin/lpc-doc.git
 
 [submodule "dgd-extensions"]
-  path = dgd-extensions
-  url = https://github.com/maldorne/dgd-extensions.git
+	path = dgd-extensions
+	url = git@github.com:maldorne/dgd-extensions.git
