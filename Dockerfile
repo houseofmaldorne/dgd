@@ -28,6 +28,10 @@ RUN make install
 # let's copy the binary to the same directory as other images
 RUN cp -R /opt/mud/driver/bin/ /opt/mud/
 
+# remove the code from the image after compiling
+# comment this line if you want to check something about the build process
+RUN rm -Rf /opt/mud/driver
+
 WORKDIR /opt/mud/
 
 # expose telnet mudos ports
