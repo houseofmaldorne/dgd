@@ -236,7 +236,8 @@ void Config::dumpinit()
     header.ilalign = ialign | (lalign << 4);
     header.palign = (char *) &pdummy.p - (char *) &pdummy.fill;
     header.zalign = sizeof(alignz);
-    header.zero1 = header.zero2 = 0;
+    header.zero1 = header.zero2 = header.zero3 = header.zero4 = 0;
+    header.vmversion = VERSION_VM_MINOR;
 
     ualign = (sizeof(uindex) == sizeof(short)) ? salign : ialign;
     talign = (sizeof(ssizet) == sizeof(short)) ? salign : ialign;
@@ -324,9 +325,11 @@ bool Config::restore(int fd, int fd2)
     }
     header.version = rheader.version;
     if (memcmp(&header, &rheader, DUMP_TYPE) != 0 || rheader.zero1 != 0 ||
-	rheader.zero2 != 0 || rheader.zero3 != 0 || rheader.zero4 != 0 ||
-	rheader.zero5 != 0) {
+	rheader.zero2 != 0 || rheader.zero3 != 0 || rheader.zero4 != 0) {
 	EC->error("Bad or incompatible snapshot header");
+    }
+    if (rheader.vmversion > VERSION_VM_MINOR) {
+	EC->error("Incompatible VM version");
     }
     if (rheader.dflags & FLAGS_PARTIAL) {
 	SnapshotInfo h;
@@ -1106,6 +1109,10 @@ bool Config::config()
 	    break;
 	}
 	conf[m].set = TRUE;
+	if (m == CACHE_SIZE) {
+	    err("option 'cache_size' is deprecated");
+	}
+
 	if (PP->gettok() != ';') {
 	    err("';' expected");
 	    return FALSE;
@@ -1483,7 +1490,6 @@ bool Config::init(char *configfile, char *snapshot, char *snapshot2,
     char buf[STRINGSZ];
     int fd, fd2, i;
     bool init;
-    Sector cache;
 
     fd = fd2 = -1;
 
@@ -1594,8 +1600,7 @@ bool Config::init(char *configfile, char *snapshot, char *snapshot2,
 		 (Uint) conf[DUMP_INTERVAL].num);
 
     /* initialize swap device */
-    cache = (Sector) ((conf[CACHE_SIZE].set) ? conf[CACHE_SIZE].num : 100);
-    Swap::init(conf[SWAP_FILE].str, (Sector) conf[SWAP_SIZE].num, cache,
+    Swap::init(conf[SWAP_FILE].str, (Sector) conf[SWAP_SIZE].num,
 	       (unsigned int) conf[SECTOR_SIZE].num);
 
     /* initialize swapped data handler */
@@ -2017,7 +2022,7 @@ bool Config::objecti(Dataspace *data, Object *obj, LPCint idx, Value *v)
 	    if (a != (Array *) NULL) {
 		PUT_ARRVAL(v, a);
 	    } else {
-		*v = Value::nil;
+		*v = nil;
 	    }
 	} else {
 	    PUT_ARRVAL(v, Array::create(data, 0));
@@ -2033,7 +2038,7 @@ bool Config::objecti(Dataspace *data, Object *obj, LPCint idx, Value *v)
 	if (ctrl->flags & CTRL_UNDEFINED) {
 	    PUT_MAPVAL(v, ctrl->undefined(data));
 	} else {
-	    *v = Value::nil;
+	    *v = nil;
 	}
 	break;
 

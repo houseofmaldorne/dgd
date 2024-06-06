@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2024 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -96,7 +96,7 @@ static User *users;		/* array of users */
 static User *lastuser;		/* last user checked */
 static User *freeuser;		/* linked list of free users */
 static User *flush;		/* flush list */
-static int nusers;		/* # of users */
+static Uint nusers;		/* # of users */
 static int odone;		/* # of users with output done */
 static uindex this_user;	/* current user */
 
@@ -194,8 +194,8 @@ Array *User::setup(Frame *f, Object *obj)
 
     Dataspace::wipeExtra(data = obj->dataspace());
     arr = Array::create(data, 3);
-    arr->elts[0] = Value::zeroInt;
-    arr->elts[1] = arr->elts[2] = Value::nil;
+    arr->elts[0] = zeroInt;
+    arr->elts[1] = arr->elts[2] = nil;
     PUT_ARRVAL_NOREF(&val, arr);
     Dataspace::setExtra(data, &val);
 
@@ -322,7 +322,7 @@ void User::uflush(Object *obj, Dataspace *data, Array *arr)
 		    flags &= ~CF_OUTPUT;
 		    flags |= CF_ODONE;
 		    odone++;
-		    data->assignElt(arr, &v[1], &Value::nil);
+		    data->assignElt(arr, &v[1], &nil);
 		}
 		osdone = n;
 	    } else {
@@ -341,15 +341,15 @@ void User::uflush(Object *obj, Dataspace *data, Array *arr)
 	} else if (conn->udp(v[2].string->text, v[2].string->len)) {
 	    flags |= CF_UDP;
 	}
-	data->assignElt(arr, &v[2], &Value::nil);
+	data->assignElt(arr, &v[2], &nil);
     }
 }
 
 
 static User *outbound;		/* pending outbound list */
-static int maxusers;		/* max # of users */
-static int maxdgram;		/* max # of datagram users */
-static int ndgram;		/* # of datagram users */
+static Uint maxusers;		/* max # of users */
+static Uint maxdgram;		/* max # of datagram users */
+static Uint ndgram;		/* # of datagram users */
 static long newlines;		/* # of newlines in all input buffers */
 static int ntport, nbport;	/* # telnet/binary ports */
 static int ndport;		/* # datagram ports */
@@ -781,8 +781,8 @@ void Comm::flush()
 		EC->fatal("can't connect to server");
 	    }
 
-	    obj->data->assignElt(arr, &arr->elts[0], &Value::zeroInt);
-	    obj->data->assignElt(arr, &arr->elts[1], &Value::nil);
+	    obj->data->assignElt(arr, &arr->elts[0], &zeroInt);
+	    obj->data->assignElt(arr, &arr->elts[1], &nil);
 	    arr->del();
 	    usr->flags &= ~CF_FLUSH;
 	} else if (obj->count != 0) {
@@ -859,7 +859,7 @@ void Comm::flush()
 	    usr->uflush(obj, obj->data, arr);
 	}
 	if ((v->number & CF_STOPPED) && !(usr->flags & CF_STOPPED)) {
-	    obj->data->assignElt(arr, &v[1], &Value::nil);
+	    obj->data->assignElt(arr, &v[1], &nil);
 	    usr->flags |= CF_STOPPED;
 	    usr->conn->stop();
 	}

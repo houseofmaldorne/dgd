@@ -1,7 +1,7 @@
 /*
  * This file is part of DGD, https://github.com/dworkin/dgd
  * Copyright (C) 1993-2010 Dworkin B.V.
- * Copyright (C) 2010-2023 DGD Authors (see the commit log for details)
+ * Copyright (C) 2010-2024 DGD Authors (see the commit log for details)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -449,12 +449,12 @@ int kf_sscanf(Frame *f, int nargs, KFun *kf)
     struct {
 	char type;			/* int, float or string */
 	union {
-	    unsigned short fhigh;	/* high word of float */
+	    FloatHigh fhigh;		/* high word of float */
 	    ssizet len;			/* length of string */
 	};
 	union {
 	    LPCint number;		/* number */
-	    Uint flow;			/* low longword of float */
+	    FloatLow flow;		/* low longword of float */
 	    char *text;			/* text of string */
 	};
     } results[MAX_LOCALS];
@@ -788,7 +788,7 @@ int kf_parse_string(Frame *f, int nargs, KFun *kf)
 	PUT_ARRVAL(f->sp, a);
     } else {
 	/* parsing failed */
-	*f->sp = Value::nil;
+	*f->sp = nil;
     }
     return 0;
 }
