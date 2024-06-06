@@ -1004,13 +1004,13 @@ int kf_restore_object(Frame *f, int n, KFun *kf)
 		continue;
 	    }
 	    for (j = ctrl->nvardefs, v = ctrl->vars(); j > 0; --j, v++) {
-		if (!(v->sclass & C_STATIC) && var->type != T_OBJECT &&
-		    var->type != T_LWOBJECT) {
-		    data->assignVar(var,
-				    (v->type == T_INT) ?
-				     &zeroInt : (v->type == T_FLOAT) ?
-						 &zeroFloat : &nil);
-		}
+		// if (!(v->sclass & C_STATIC) && var->type != T_OBJECT &&
+		//     var->type != T_LWOBJECT) {
+		//     data->assignVar(var,
+		// 		    (v->type == T_INT) ?
+		// 		     &zeroInt : (v->type == T_FLOAT) ?
+		// 				 &zeroFloat : &nil);
+		// }
 		var++;
 		nvars++;
 	    }
