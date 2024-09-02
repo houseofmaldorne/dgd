@@ -727,6 +727,41 @@ Uint Config::dconv(char *buf, char *rbuf, const char *layout, Uint n)
 	    case 'e':
 		i = ALGN(i, ealign);
 		ri = ALGN(ri, realign);
+		if (sizeof(eindex) == resize) {
+		    switch (sizeof(eindex)) {
+		    case sizeof(char):
+			buf[i] = rbuf[ri];
+			break;
+
+		    case sizeof(short):
+			buf[i + header.s[0]] = rbuf[ri + rheader.s[0]];
+			buf[i + header.s[1]] = rbuf[ri + rheader.s[1]];
+			break;
+
+		    case sizeof(Int):
+			buf[i + header.i[0]] = rbuf[ri + rheader.i[0]];
+			buf[i + header.i[1]] = rbuf[ri + rheader.i[1]];
+			buf[i + header.i[2]] = rbuf[ri + rheader.i[2]];
+			buf[i + header.i[3]] = rbuf[ri + rheader.i[3]];
+			break;
+		    }
+		} else if (sizeof(eindex) == sizeof(short)) {
+		    buf[i + header.s[0]] = (UCHAR(rbuf[ri]) == 0xff) ? -1 : 0;
+		    buf[i + header.s[1]] = rbuf[ri];
+		} else if (resize == sizeof(char)) {
+		    j = (UCHAR(rbuf[ri]) == 0xff) ? -1 : 0;
+		    buf[i + header.i[0]] = j;
+		    buf[i + header.i[1]] = j;
+		    buf[i + header.i[2]] = j;
+		    buf[i + header.i[3]] = rbuf[ri];
+		} else {
+		    j = (UCHAR(rbuf[ri + rheader.s[0]] &
+			 rbuf[ri + rheader.s[1]]) == 0xff) ? -1 : 0;
+		    buf[i + header.i[0]] = j;
+		    buf[i + header.i[1]] = j;
+		    buf[i + header.i[2]] = rbuf[ri + rheader.s[0]];
+		    buf[i + header.i[3]] = rbuf[ri + rheader.s[1]];
+		}
 		i += sizeof(eindex);
 		ri += resize;
 		break;
@@ -1292,6 +1327,7 @@ bool Config::includes()
     puts("# define ST_DATAGRAMPORTS 24\t/* datagram ports */\012");
     puts("# define ST_TELNETPORTS\t25\t/* telnet ports */\012");
     puts("# define ST_BINARYPORTS\t26\t/* binary ports */\012");
+    puts("# define ST_NUSERS\t27\t/* # users */\012");
 
     puts("\012# define O_COMPILETIME\t0\t/* time of compilation */\012");
     puts("# define O_PROGSIZE\t1\t/* program size of object */\012");
@@ -1952,6 +1988,10 @@ bool Config::statusi(Frame *f, LPCint idx, Value *v)
 	}
 	break;
 
+    case 27:	/* ST_NUSERS */
+	PUT_INTVAL(v, Comm::numUsers());
+	break;
+
     default:
 	return FALSE;
     }
@@ -1970,8 +2010,8 @@ Array *Config::status(Frame *f)
 
     try {
 	EC->push();
-	a = Array::createNil(f->data, 27);
-	for (i = 0, v = a->elts; i < 27; i++, v++) {
+	a = Array::createNil(f->data, 28);
+	for (i = 0, v = a->elts; i < 28; i++, v++) {
 	    statusi(f, i, v);
 	}
 	EC->pop();
