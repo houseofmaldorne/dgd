@@ -55,6 +55,6 @@ This distribution is organized as follows:
   (with the source code of DGD) and `bin`, with the binaries needed
   to use DGD.
 
-- Publish the container in Docker Hub
+- Publish the container to Github Container Registry
 
   `docker push ghcr.io/maldorne/dgd:latest`
