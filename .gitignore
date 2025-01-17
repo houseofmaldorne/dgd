@@ -27,3 +27,5 @@ src/host/win32/dgd.v11.suo
 src/host/win32/dgd.vcxproj.user
 src/host/win32/dgd.VC.db
 src/host/win32/dgd.VC.VC.opendb
+
+.DS_Store
